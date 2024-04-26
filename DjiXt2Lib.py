@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from icecream import ic
 from libtiff import TIFF
 import numpy as np
+import cv2
+from PIL import Image
+
 
 EXIFTOOL_PATH = '/usr/local/bin/exiftool'
 NIVEAU_LAC=-17.832377624511718-1.8011
@@ -30,13 +33,13 @@ class imageclass():
         self.sensor_width,self.sensor_heigh = self.sensor_size 
         with ExifToolHelper(executable=EXIFTOOL_PATH)as et:
             self.metadata=et.get_metadata(self.FileName)[0]  
-            print(self.metadata)
+            #print(self.metadata)
         if 'EXIF:ImageWidth' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
             self.image_width=int(self.metadata['EXIF:ImageWidth'])
         if 'EXIF:ImageHeight' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
-            self.image_eight=int(self.metadata['EXIF:ImageHeight'])
+            self.image_height=int(self.metadata['EXIF:ImageHeight'])
 
         if 'EXIF:FocalLength' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
@@ -56,7 +59,8 @@ class imageclass():
             
         if 'XMP:GimbalPitchDegree' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
-            self.pitch=float(self.metadata['XMP:GimbalPitchDegree'])
+            #### +90 car avec Drone DJI NADIR = -90####
+            self.pitch=float(self.metadata['XMP:GimbalPitchDegree'])+90
 
         if 'Composite:GPSLatitude' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
@@ -77,12 +81,15 @@ class imageclass():
             #print(self.metadata['EXIF:ImageWidth'])
             self.TGain=float(self.metadata['XMP:TlinearGain'])
         print(f'{self.relative_altitude=} {self.absolute_altitude=}')
+        
+        self.gsd = (self.sensor_width * self.relative_altitude) / (self.focal_length * self.image_width)
+    
 
     def compute_camera(self):
-    # initialize the camera
+    # initialize the camera    
         self.camera = ct.Camera(ct.RectilinearProjection(focallength_mm=self.focal_length,
                                             sensor=self.sensor_size,
-                                            image=(self.image_width,self.image_eight)),
+                                            image=(self.image_width,self.image_height)),
                 ct.SpatialOrientation(elevation_m=self.relative_altitude,
                                         tilt_deg=self.pitch,
                                         heading_deg=self.yaw,
@@ -91,18 +98,28 @@ class imageclass():
                                         pos_y_m=self.local_latitude))
 
 def camToOrtho(image:imageclass,gds=0.1):
+    
+    #print(f'GSD {image.gsd} GSD 35mm {image.gsd_35mm} gds {gds}')
 
+    
     print("Calcul spaceFromImage")
 
     C1=image.camera.spaceFromImage([0, 0],Z=0)
     C2=image.camera.spaceFromImage([image.image_width, 0],Z=0)
-    C3=image.camera.spaceFromImage([0, image.image_eight],Z=0)
-    C4=image.camera.spaceFromImage([image.image_width ,image.image_eight],Z=0)
+    C3=image.camera.spaceFromImage([0, image.image_height],Z=0)
+    C4=image.camera.spaceFromImage([image.image_width ,image.image_height],Z=0)
+
+    # C1=cam.spaceFromImage([0, 0],Z=0)
+    # C2=cam.spaceFromImage([np.float(Sensor['ImageWidth']), 0],Z=0)
+    # C3=cam.spaceFromImage([0, np.float(Sensor['ImageHeight'])],Z=0)
+    # C4=cam.spaceFromImage([np.float(Sensor['ImageWidth']),np.float(Sensor['ImageHeight'])],Z=0)
+
+
 
     print("Calcul emissions")
-    emission = np.empty([image.image_eight, image.image_width])
+    emission = np.empty([image.image_height, image.image_width])
     for i in range(image.image_width):
-        for j in range(image.image_eight):
+        for j in range(image.image_height):
             offset, ray = image.camera.getRay([i, j],normed=True)
             p = ray[0]/ray[2]
             pt = ray[1]/ray[2]
@@ -120,35 +137,50 @@ def camToOrtho(image:imageclass,gds=0.1):
 
     tif_file = TIFF.open(image.FileName, mode='r')
     im_array = tif_file.read_image()
-    ortho = image.camera.getTopViewOfImage(im_array*image.TGain, [xmin,xmax,ymin,ymax], scaling=gds, do_plot=False)
-    emission_o = image.camera.getTopViewOfImage(emission, [xmin,xmax,ymin,ymax], scaling=gds, do_plot=False)
+
+
+#    with Image.open(image.FileName) as im:
+#        __import__("IPython").embed()
+#        im_array = np.array(im)
+
+#
+    ortho = image.camera.getTopViewOfImage(im_array*image.TGain, [xmin,xmax,ymin,ymax], scaling=image.gsd, do_plot=False)
+    emission_o = image.camera.getTopViewOfImage(emission, [xmin,xmax,ymin,ymax], scaling=image.gsd, do_plot=False)
     # for sake of efficiency, we by pass the usage of geotiff libs, such as GDAL
     image_size = ortho.shape
+
+
+    cv2.imshow('ortho', ortho)
+    cv2.waitKey(0) 
+    cv2.imshow('emission_o', emission_o)
+    cv2.waitKey(0) 
+  
+    # closing all open windows 
+    cv2.destroyAllWindows() 
 
     nx = image_size[0]
     ny = image_size[1]
 
-    image.gsd = (image.sensor_width * image.relative_altitude) / (image.focal_length * image.image_width)
-    image.gsd_35mm = (image.sensor_width * image.relative_altitude) / (image.focal_length_35_mm * image.image_width)
-
-    print(f'GSD {image.gsd} GSD 35mm {image.gsd_35mm} gds {gds}')
-
+   
     xres = image.gsd
     yres = image.gsd
 
     # geotransform = (xmin, xres, 0, ymax, 0, -yres)
+
+    # Word file ortho
     WorldFile = (xres,0,0, -yres, xmin, ymax)
     Name,ext = os.path.splitext(image.FileName)
     wrdFile = Name+'_ortho.tfw'
-    myGeoTIFF = Name+'_ortho.tif'
     f_handle = open(wrdFile, 'w')
     np.savetxt(f_handle, WorldFile, fmt="%.3f")
     f_handle.close()
 
-
+    # Ortho
+    myGeoTIFF = Name+'_ortho.tif'
     tif = TIFF.open(myGeoTIFF, mode='w')
     tif.write_image(ortho)
 
+    # Word file emission
     WorldFile = (xres,0,0, -yres, xmin, ymax)
     Name,ext = os.path.splitext(image.FileName)
     wrdFile = Name+'_emission.tfw'
@@ -159,7 +191,7 @@ def camToOrtho(image:imageclass,gds=0.1):
 
     tif = TIFF.open(myGeoTIFF, mode='w')
     tif.write_image(emission_o)
-    return ortho
+    #return ortho
 
 
 
