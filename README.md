@@ -10,7 +10,7 @@ source .venv/bin/activate
 # install requirements
 
 ```
-pip install --force-reinstall -r requirements.txt  
+pip install  -r requirements.txt  
 ````
 
 

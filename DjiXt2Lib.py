@@ -98,110 +98,133 @@ class imageclass():
                                         pos_x_m=self.local_longitude,
                                         pos_y_m=self.local_latitude))
 
-def camToOrtho(image:imageclass,gds=0.1):
-    
+        print("Calcul spaceFromImage")
+        self.C1=self.camera.spaceFromImage([0, 0],Z=0)
+        self.C2=self.camera.spaceFromImage([self.image_width, 0],Z=0)
+        self.C3=self.camera.spaceFromImage([0, self.image_height],Z=0)
+        self.C4=self.camera.spaceFromImage([self.image_width ,self.image_height],Z=0)
+
+        self.xmin=min(self.C1[0],self.C2[0],self.C3[0],self.C4[0])
+        self.xmax=max(self.C1[0],self.C2[0],self.C3[0],self.C4[0])
+        self.ymin=min(self.C1[1],self.C2[1],self.C3[1],self.C4[1])
+        self.ymax=max(self.C1[1],self.C2[1],self.C3[1],self.C4[1])
+
+        self.footprint_box = [self.xmin,self.xmax,self.ymin,self.ymax]
 
 
-    print("Calcul spaceFromImage")
+    def compute_emission(self):
+        #self.image_height, self.image_width = (5,5)
+        emission = np.empty([self.image_height, self.image_width])
+        
+        # for i in range(self.image_width):
+        #     for j in range(self.image_height):
+        #         offset, ray = self.camera.getRay([i, j],normed=True)
+        #         #p = ray[0]/ray[2]
+        #         #pt = ray[1]/ray[2]
+        #         theta = np.arctan2(np.sqrt(ray[0]**2+ray[1]**2),-ray[2])*180.0/np.pi
+        #         emission[j][i] = theta
 
-    C1=image.camera.spaceFromImage([0, 0],Z=0)
-    C2=image.camera.spaceFromImage([image.image_width, 0],Z=0)
-    C3=image.camera.spaceFromImage([0, image.image_height],Z=0)
-    C4=image.camera.spaceFromImage([image.image_width ,image.image_height],Z=0)
+        emission_matrix = np.empty([self.image_height, self.image_width])
 
+        for i in range(self.image_width):
+                
+                offset_line, ray_line_matrix = self.camera.getRay([[i, j] for j in range(self.image_height)],normed=True)
+                
+                #p_matrix = ray_line_matrix[:,0]/ray_line_matrix[:,2]
+                #pt_matrix = ray_line_matrix[:,1]/ray_line_matrix[:,2]
+                
+                theta_matrix = np.arctan2(np.sqrt(ray_line_matrix[:,0]**2+ray_line_matrix[:,1]**2),-ray_line_matrix[:,2])*180.0/np.pi
+                #theta = np.arctan2(np.sqrt(ray[0]**2+ray[1]**2),-ray[2])*180.0/np.pi
+                
+                #emission[j][i] = theta
+                #np.append(emission_matrix,theta_matrix)
+                emission_matrix[:,i]=theta_matrix
 
+        #__import__("IPython").embed()
+        #exit
+        emission_o = self.camera.getTopViewOfImage(emission, self.footprint_box, scaling=self.gsd, do_plot=False)
 
-#    __import__("IPython").embed()
-    # print("Calcul emissions")
-    # emission = np.empty([image.image_height, image.image_width])
-    
-    # for i in range(image.image_width):
-    #     for j in range(image.image_height):
-    #         offset, ray = image.camera.getRay([i, j],normed=True)
-    #         p = ray[0]/ray[2]
-    #         pt = ray[1]/ray[2]
-    #         theta = np.arctan2(np.sqrt(ray[0]**2+ray[1]**2),-ray[2])*180.0/np.pi
-    #         emission[j][i] = theta
+        #cv2.imshow('tiff', im_array*10)
+        #cv2.waitKey(0)
 
-    # emission_matrix = np.empty([image.image_height, image.image_width])
+        #cv2.imshow('ortho', ortho)
+        #cv2.waitKey(0)
+        #cv2.imshow('emission_o', emission_o)
+    # cv2.waitKey(0) 
 
-    # for i in range(image.image_width):
-            
-    #         offset_line, ray_line_matrix = image.camera.getRay([[i, j] for j in range(image.image_height)],normed=True)
-            
-    #         p_matrix = ray_line_matrix[:,0]/ray_line_matrix[:,2]
-    #         pt_matrix = ray_line_matrix[:,1]/ray_line_matrix[:,2]
-            
-    #         theta_matrix = np.arctan2(np.sqrt(ray_line_matrix[:,0]**2+ray_line_matrix[:,1]**2),-ray_line_matrix[:,2])*180.0/np.pi
-    #         #theta = np.arctan2(np.sqrt(ray[0]**2+ray[1]**2),-ray[2])*180.0/np.pi
-            
-    #         #emission[j][i] = theta
-    #         np.append(emission_matrix,theta_matrix)
-
-
-    xmin=min(C1[0],C2[0],C3[0],C4[0])
-    xmax=max(C1[0],C2[0],C3[0],C4[0])
-    ymin=min(C1[1],C2[1],C3[1],C4[1])
-    ymax=max(C1[1],C2[1],C3[1],C4[1])
-
-
-    print("Calcul ortho")
-
-    im_array = io.imread(image.FileName)
-    #__import__("IPython").embed()
-
-    ortho = image.camera.getTopViewOfImage(im_array*image.TGain, [xmin,xmax,ymin,ymax], scaling=image.gsd, do_plot=False)
-   # emission_o = image.camera.getTopViewOfImage(emission, [xmin,xmax,ymin,ymax], scaling=image.gsd, do_plot=False)
-
-    #cv2.imshow('tiff', im_array*10)
-    #cv2.waitKey(0)
-
-    #cv2.imshow('ortho', ortho)
-    #cv2.waitKey(0)
-    #cv2.imshow('emission_o', emission_o)
-   # cv2.waitKey(0) 
-
-    # closing all open windows 
-    cv2.destroyAllWindows() 
-
-
-
-
-    xres = image.gsd
-    yres = image.gsd
-
-    # geotransform = (xmin, xres, 0, ymax, 0, -yres)
-
-    # Word file ortho
-    WorldFile = (xres,0,0, -yres, xmin, ymin)
-    Name,ext = os.path.splitext(image.FileName)
-
-
-    wrdFile = f'{Name}_2_ortho.tfw'
-    with open(wrdFile, 'w') as f_handle:
-        np.savetxt(f_handle, WorldFile, fmt="%.3f")
-
-    # Ortho
-    myGeoTIFF_2 = f'{Name}_2_ortho.tif'
-    
-
-    tiff = TIFFimage(ortho, description='image.FileName')
-    tiff.write_file(myGeoTIFF_2, compression=None) # or 'lzw'
-
-    # # Word file emission
-    # WorldFile = (xres,0,0, -yres, xmin, ymax)
-    # Name,ext = os.path.splitext(image.FileName)
-    # wrdFile = f'{Name}_emission.tfw'
-    # myGeoTIFF = f'{Name}_emission.tif'
-    # with open(wrdFile, 'w') as f_handle:
-    #     np.savetxt(f_handle, WorldFile, fmt="%.3f")
-    # tif = TIFF.open(myGeoTIFF, mode='w')
-    # tif.write_image(emission_o)
+        # closing all open windows
+         # Word file emission
+        # WorldFile = (xres,0,0, -yres, xmin, ymax)
+        # Name,ext = os.path.splitext(self.FileName)
+        # wrdFile = f'{Name}_emission.tfw'
+        # myGeoTIFF = f'{Name}_emission.tif'
+        # with open(wrdFile, 'w') as f_handle:
+        #     np.savetxt(f_handle, WorldFile, fmt="%.3f")
+        # tif = TIFF.open(myGeoTIFF, mode='w')
+        # tif.write_image(emission_o)
 
 
 
 
-#Sensor['Size'] = (8.7, 6.22)   # in mm (this field is not present in the DJI XT2 Exif) ?? check for the Thermal sensor
+    def compute_ortho(self,gsd=0.1):
+
+        print("Calcul ortho")
+
+        im_array = io.imread(self.FileName)
+        #__import__("IPython").embed()
+
+        ortho = self.camera.getTopViewOfImage(im_array*self.TGain, self.footprint_box, scaling=self.gsd, do_plot=False)
+    # emission_o = self.camera.getTopViewOfImage(emission, [xmin,xmax,ymin,ymax], scaling=self.gsd, do_plot=False)
+
+        #cv2.imshow('tiff', im_array*10)
+        #cv2.waitKey(0)
+
+        #cv2.imshow('ortho', ortho)
+        #cv2.waitKey(0)
+        #cv2.imshow('emission_o', emission_o)
+    # cv2.waitKey(0) 
+
+        # closing all open windows 
+        cv2.destroyAllWindows() 
+
+
+
+
+        xres = self.gsd
+        yres = self.gsd
+
+        # geotransform = (xmin, xres, 0, ymax, 0, -yres)
+
+        # Word file ortho
+        WorldFile = (xres,0,0, -yres, self.xmin, self.ymin)
+        Name,ext = os.path.splitext(self.FileName)
+
+
+        wrdFile = f'{Name}_2_ortho.tfw'
+        with open(wrdFile, 'w') as f_handle:
+            np.savetxt(f_handle, WorldFile, fmt="%.3f")
+
+        # Ortho
+        myGeoTIFF_2 = f'{Name}_2_ortho.tif'
+        
+
+        tiff = TIFFimage(ortho, description=self.FileName)
+        tiff.write_file(myGeoTIFF_2, compression=None) # or 'lzw'
+
+        # # Word file emission
+        # WorldFile = (xres,0,0, -yres, xmin, ymax)
+        # Name,ext = os.path.splitext(self.FileName)
+        # wrdFile = f'{Name}_emission.tfw'
+        # myGeoTIFF = f'{Name}_emission.tif'
+        # with open(wrdFile, 'w') as f_handle:
+        #     np.savetxt(f_handle, WorldFile, fmt="%.3f")
+        # tif = TIFF.open(myGeoTIFF, mode='w')
+        # tif.write_image(emission_o)
+
+
+
+
+    #Sensor['Size'] = (8.7, 6.22)   # in mm (this field is not present in the DJI XT2 Exif) ?? check for the Thermal sensor
 
 
 
@@ -227,6 +250,7 @@ def main() -> None:
     parser.add_argument("--gain", type=int,
                         help="numerical gain",default=150,
                         required=False)
+    parser.add_argument("-emission",help="compute emission",action='store_true')
     
     args = parser.parse_args()
 
@@ -249,9 +273,10 @@ def main() -> None:
     print(f'Drone RTK altitude{image_test.absolute_altitude} Drone to ground distance {image_test.relative_altitude}')
     print("Calcul camera")
     image_test.compute_camera()
-    #ic(image_test)
-    camToOrtho(image_test); # orthoimage computation from camera and sensor model
-
+    #image_test.compute_ortho() # orthoimage computation from camera and sensor model
+    if args.emission :
+            image_test.compute_emission()
+    
 
 
 if __name__ == "__main__":
