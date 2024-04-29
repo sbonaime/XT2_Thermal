@@ -16,8 +16,7 @@ from icecream import ic
 from libtiff import TIFF
 import numpy as np
 import cv2
-from PIL import Image
-
+from skimage import io
 
 EXIFTOOL_PATH = '/usr/local/bin/exiftool'
 NIVEAU_LAC=-17.832377624511718-1.8011
@@ -80,7 +79,8 @@ class imageclass():
         if 'XMP:TlinearGain' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
             self.TGain=float(self.metadata['XMP:TlinearGain'])
-        print(f'{self.relative_altitude=} {self.absolute_altitude=}')
+            self.TGain=1
+        print(f'{self.relative_altitude=} {self.absolute_altitude=} {self.TGain=}')
         
         self.gsd = (self.sensor_width * self.relative_altitude) / (self.focal_length * self.image_width)
     
@@ -135,13 +135,8 @@ def camToOrtho(image:imageclass,gds=0.1):
 #    from matplotlib import cm
     #gds = 0.05 # Ground Distance Sampling in m
 
-    tif_file = TIFF.open(image.FileName, mode='r')
-    im_array = tif_file.read_image()
+    im_array = io.imread(image.FileName)
 
-
-#    with Image.open(image.FileName) as im:
-#        __import__("IPython").embed()
-#        im_array = np.array(im)
 
 #
     ortho = image.camera.getTopViewOfImage(im_array*image.TGain, [xmin,xmax,ymin,ymax], scaling=image.gsd, do_plot=False)
@@ -158,8 +153,7 @@ def camToOrtho(image:imageclass,gds=0.1):
     # closing all open windows 
     cv2.destroyAllWindows() 
 
-    nx = image_size[0]
-    ny = image_size[1]
+
 
    
     xres = image.gsd
