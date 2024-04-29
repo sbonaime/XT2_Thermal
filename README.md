@@ -12,3 +12,10 @@ source .venv/bin/activate
 ```
 pip install --force-reinstall -r requirements.txt  
 ````
+
+
+# Usage
+
+````
+./DjiXt2Lib.py  DJI_0560.tiff 4471
+````
