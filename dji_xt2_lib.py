@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""DJIXT2Lib.py: Python librairy for the DJI XT2 Thermal Sensor."""
+"""DJIXT2Lib.py: Python library for the DJI XT2 Thermal Sensor."""
+__author__ = "Antoine LUCAS, Sebastien BONAIME"
+__status__ = "Dev"
+__version__ = "1.1.0"
 
 
-import os
+import os,sys
 import argparse
+from dataclasses import dataclass, field
+from libtiff import TIFFimage
 import numpy as np
 import cameratransform as ct
 from pyproj import Transformer
-import warnings
 from exiftool import ExifToolHelper
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-from dataclasses import dataclass
-from libtiff import TIFFimage
 import cv2
 from skimage import io
 
@@ -20,19 +21,29 @@ NIVEAU_LAC=-17.832377624511718-1.8011
 
 
 @dataclass
-class imageclass():
-    FileName : str
+class ImageClass():
+    file_name : str
     sensor_size : tuple # in mm. To check for DJI XT2 thermal. Not in exif..
     local_longitude : float = 0
     local_latitude : float = 0
     gain : int = 0
     plot : bool = False
+    corner_1 : int = 0
+    corner_2 : int = 0
+    corner_3 : int = 0
+    corner_4 : int = 0
+    footprint_x_min : int = 0
+    footprint_x_max : int = 0
+    footprint_y_min : int = 0
+    footprint_y_max : int = 0
+    footprint_box : list[int] = field(default_factory=list)
+
     def __post_init__(self):
-        self.name,ext = os.path.splitext(self.FileName)
+        self.name,_ = os.path.splitext(self.file_name)
 
         self.sensor_width,self.sensor_heigh = self.sensor_size
         with ExifToolHelper(executable=EXIFTOOL_PATH)as et:
-            self.metadata=et.get_metadata(self.FileName)[0]
+            self.metadata=et.get_metadata(self.file_name)[0]
             #print(self.metadata)
         if 'EXIF:ImageWidth' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
@@ -78,10 +89,11 @@ class imageclass():
 
         if 'XMP:TlinearGain' in self.metadata:
             #print(self.metadata['EXIF:ImageWidth'])
-            self.TGain=float(self.metadata['XMP:TlinearGain'])
+            self.thermal_gain=float(self.metadata['XMP:TlinearGain'])
             if self.gain != 0:
-                self.TGain = self.gain
-        self.gsd = (self.sensor_width * self.relative_altitude) / (self.focal_length * self.image_width)
+                self.thermal_gain = self.gain
+        self.gsd = (self.sensor_width * self.relative_altitude)\
+              / (self.focal_length * self.image_width)
 
     def compute_camera(self):
     # initialize the camera
@@ -96,25 +108,28 @@ class imageclass():
                                         pos_y_m=self.local_latitude))
 
         print("Calcul spaceFromImage")
-        self.C1=self.camera.spaceFromImage([0, 0],Z=0)
-        self.C2=self.camera.spaceFromImage([self.image_width, 0],Z=0)
-        self.C3=self.camera.spaceFromImage([0, self.image_height],Z=0)
-        self.C4=self.camera.spaceFromImage([self.image_width ,self.image_height],Z=0)
-        self.xmin=min(self.C1[0],self.C2[0],self.C3[0],self.C4[0])
-        self.xmax=max(self.C1[0],self.C2[0],self.C3[0],self.C4[0])
-        self.ymin=min(self.C1[1],self.C2[1],self.C3[1],self.C4[1])
-        self.ymax=max(self.C1[1],self.C2[1],self.C3[1],self.C4[1])
-        self.footprint_box = [self.xmin,self.xmax,self.ymin,self.ymax]
+        self.corner_1=self.camera.spaceFromImage([0, 0],Z=0)
+        self.corner_2=self.camera.spaceFromImage([self.image_width, 0],Z=0)
+        self.corner_3=self.camera.spaceFromImage([0, self.image_height],Z=0)
+        self.corner_4=self.camera.spaceFromImage([self.image_width ,self.image_height],Z=0)
+
+
+        self.footprint_x_min=min(self.corner_1[0],self.corner_2[0],self.corner_3[0],self.corner_4[0])
+        self.footprint_x_max=max(self.corner_1[0],self.corner_2[0],self.corner_3[0],self.corner_4[0])
+        self.footprint_y_min=min(self.corner_1[1],self.corner_2[1],self.corner_3[1],self.corner_4[1])
+        self.footprint_y_max=max(self.corner_1[1],self.corner_2[1],self.corner_3[1],self.corner_4[1])
+        self.footprint_box = [self.footprint_x_min,self.footprint_x_max,self.footprint_y_min,self.footprint_y_max]
 
     def compute_emission(self):
         emission_matrix = np.empty([self.image_height, self.image_width])
         for i in range(self.image_width):
-            offset_line, ray_line_matrix = self.camera.getRay([[i, j] for j in range(self.image_height)],normed=True)
+            _, ray_line_matrix = self.camera.getRay([[i, j] for j in range(self.image_height)],normed=True)
             theta_matrix = np.arctan2(np.sqrt(ray_line_matrix[:,0]**2+ray_line_matrix[:,1]**2),-ray_line_matrix[:,2])*180.0/np.pi
             emission_matrix[:,i]=theta_matrix
         emission = self.camera.getTopViewOfImage(emission_matrix, self.footprint_box, scaling=self.gsd, do_plot=False)
-        if self.plot:
-           self.plot('Emission',emission)
+
+        #if self.plot:
+        #   self.plot('Emission',emission)
 
 
         self. write_worldfile_geotiff(emission,"emission","emission")
@@ -125,39 +140,38 @@ class imageclass():
         cv2.destroyAllWindows()
 
     def write_worldfile_geotiff(self,image:np.ndarray, description:str, suffix:str):
+        print("Writinf file")
          # Word file ortho
-        WorldFile = (self.gsd,0,0, -self.gsd, self.xmin, self.ymin)
+        world_file_data = (self.gsd,0,0, -self.gsd, self.footprint_x_min, self.footprint_y_min)
 
-        wrdFile = f'{self.name}_{suffix}.tfw'
-        with open(wrdFile, 'w') as f_handle:
-            np.savetxt(f_handle, WorldFile, fmt="%.3f")
+        world_file_filename = f'{self.name}_{suffix}.tfw'
+        with open(world_file_filename, 'w',encoding="utf-8")  as f_handle:
+            np.savetxt(f_handle, world_file_data, fmt="%.3f")
 
         # Write orthophoto
-        myGeoTIFF = f'{self.name}_{suffix}.tif'
-
-        tiff = TIFFimage(image, description=f"{self.FileName} {description}")
-        tiff.write_file(myGeoTIFF, compression=None) # or 'lzw'
-
+        geotiff_filename = f'{self.name}_{suffix}.tif'
+        tiff = TIFFimage(image, description=f"{self.file_name} {description}")
+        tiff.write_file(geotiff_filename, compression=None) # or 'lzw'
 
 
-    def compute_ortho(self,gsd=0.1):
 
-        print("Calcul ortho")
+    def compute_ortho(self):
 
-        im_array = io.imread(self.FileName)
-        #__import__("IPython").embed()
+        print("Compute orthophoto")
 
-        ortho = self.camera.getTopViewOfImage(im_array*self.TGain, self.footprint_box, scaling=self.gsd, do_plot=False)
+        im_array = io.imread(self.file_name)
+
+        ortho = self.camera.getTopViewOfImage(im_array*self.thermal_gain, self.footprint_box, scaling=self.gsd, do_plot=False)
 
         if self.plot:
-            self.plot("Orthophoto", ortho)
+            self.plot_image("Orthophoto", ortho)
 
         self.write_worldfile_geotiff(ortho,"ortho", "orthophoto")
 
 
 def main() -> None:
     """
-    Create GEOtiff from XT2 thermal Tiff
+    Create GEOtiff from DJI XT2 thermal Tiff
     """
     parser = argparse.ArgumentParser(description="Create GEOtiff from XT2 thermal Tiff.")
     parser.add_argument("input_file", help="Thermal input tiff file")
@@ -172,23 +186,22 @@ def main() -> None:
     parser.add_argument("--gain", type=int,help="numerical gain",default=150,required=False)
     parser.add_argument("-emission",help="Ccompute emission",action='store_true')
     parser.add_argument("-no_ortho",help="Do not compute orthophoto",action='store_true')
-    parser.add_argument("-plot",help="Plot images",action='store_true')
+    parser.add_argument("-plot",help="Plot ortho",action='store_true')
 
     args = parser.parse_args()
 
 
 
-    inProj = 'EPSG:4326' # WGS-84 [dd.mm.sssd]
-    outProj = f'EPSG:{args.output_epsg}'
+    epsg_input = 'EPSG:4326' # WGS-84 [dd.mm.sssd]
+    epsg_output = f'EPSG:{args.output_epsg}'
 
 
     # Transformation des coordonnées
-    transformer = Transformer.from_crs(inProj,outProj)
-    image_test=imageclass(args.input_file,(args.sensor_width, args.sensor_height),gain=args.gain, plot=args.plot)
+    transformer = Transformer.from_crs(epsg_input,epsg_output)
+    image_test=ImageClass(args.input_file,(args.sensor_width, args.sensor_height),gain=args.gain, plot=args.plot)
 
     image_test.local_longitude,image_test.local_latitude  = transformer.transform(image_test.latitude,image_test.longitude)
-
-
+    print(f'{image_test.latitude=} {image_test.longitude=}\n{image_test.local_longitude=} {image_test.local_latitude=}')
     # On utilise l'altitude RTK du drone et du lac pour trouver la hauteur au lac'
     image_test.relative_altitude = image_test.absolute_altitude - args.rtk_ground_reference
     print(f'Drone RTK altitude{image_test.absolute_altitude} Drone to ground distance {image_test.relative_altitude}')
@@ -197,7 +210,7 @@ def main() -> None:
     if not args.no_ortho :
         image_test.compute_ortho() # orthoimage computation from camera and sensor model
     if args.emission :
-            image_test.compute_emission()
+        image_test.compute_emission()
 
 
 
