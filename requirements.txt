@@ -13,13 +13,10 @@ ipython==8.23.0
 jedi==0.19.1
 kiwisolver==1.4.5
 lazy_loader==0.4
-matplotlib==3.8.4
-matplotlib-inline==0.1.7
 networkx==3.3
 numpy==1.26.4
 opencv-python==4.9.0.80
 packaging==24.0
-pandas==2.2.2
 parso==0.8.4
 pexpect==4.9.0
 pillow==10.3.0
@@ -37,7 +34,6 @@ scikit-image==0.23.2
 scipy==1.13.0
 six==1.16.0
 stack-data==0.6.3
-tifffile==2024.4.24
 tqdm==4.66.2
 traitlets==5.14.3
 tzdata==2024.1
