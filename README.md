@@ -20,22 +20,22 @@ pip install  -r requirements.txt
 
 ## Compute orthophoto for file DJI_0560.tiff using EPSG:4471
 ````
-./dji_xt2_lib.py  DJI_0560.tiff 4471
+python3 dji_xt2_lib.py  DJI_0560.tiff 4471
 ````
 
 ## Compute orthophoto and emission  for file DJI_0560.tiff using EPSG:4471
 ````
-./dji_xt2_lib.py  DJI_0560.tiff 4471 -emission
+python3 dji_xt2_lib.py DJI_0560.tiff 4471 -emission
 ````
 ## Compute  emission  for file DJI_0560.tiff using EPSG:4471
 ```
-./dji_xt2_lib.py  DJI_0560.tiff 4471 -emission -no_ortho
+python3 dji_xt2_lib.py  DJI_0560.tiff 4471 -emission -no_ortho
 ```
 
 
 ## Compute orthophoto AND emission  for file DJI_0560.tiff using EPSG:4471
 ````
-./dji_xt2_lib.py  DJI_0560.tiff 4471 -emission
+python3 dji_xt2_lib.py DJI_0560.tiff 4471 -emission
 ````
 
 ## Options
