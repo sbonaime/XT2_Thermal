@@ -126,13 +126,13 @@ class ImageClass():
             _, ray_line_matrix = self.camera.getRay([[i, j] for j in range(self.image_height)],normed=True)
             theta_matrix = np.arctan2(np.sqrt(ray_line_matrix[:,0]**2+ray_line_matrix[:,1]**2),-ray_line_matrix[:,2])*180.0/np.pi
             emission_matrix[:,i]=theta_matrix
-        emission = self.camera.getTopViewOfImage(emission_matrix, self.footprint_box, scaling=self.gsd, do_plot=False)
+        self.emission = self.camera.getTopViewOfImage(emission_matrix, self.footprint_box, scaling=self.gsd, do_plot=False)
 
         #if self.plot:
         #   self.plot('Emission',emission)
 
 
-        self. write_worldfile_geotiff(emission,"emission","emission")
+        self. write_worldfile_geotiff(self.emission,"emission","emission")
 
     def plot_image(self,title, image):
         cv2.imshow(title, image)
@@ -161,12 +161,12 @@ class ImageClass():
 
         im_array = io.imread(self.file_name)
 
-        ortho = self.camera.getTopViewOfImage(im_array*self.thermal_gain, self.footprint_box, scaling=self.gsd, do_plot=False)
+        self.ortho = self.camera.getTopViewOfImage(im_array*self.thermal_gain, self.footprint_box, scaling=self.gsd, do_plot=False)
 
         if self.plot:
-            self.plot_image("Orthophoto", ortho)
+            self.plot_image("Orthophoto", self.ortho)
 
-        self.write_worldfile_geotiff(ortho,"ortho", "orthophoto")
+        self.write_worldfile_geotiff(self.ortho,"ortho", "orthophoto")
 
 
 def main() -> None:
