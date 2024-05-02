@@ -40,5 +40,7 @@ pip install  -r requirements.txt
 
 ## Options
 -plot : Display orthophoto images
+
 -emission :Compute emission image
+
 -no_ortho : Do not compute orthophoto
